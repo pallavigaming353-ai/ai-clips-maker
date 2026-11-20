@@ -5,6 +5,10 @@ import threading
 import secrets
 import logging
 import shutil
+import ipaddress
+import socket
+from urllib.parse import urlsplit
+import httpx
 import uuid
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile, Header, Form
@@ -142,6 +146,77 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         raise
     jobs[job_id]["status"]="queued"
     threading.Thread(target=process,args=(job_id,source,chosen),daemon=True).start()
+    return jobs[job_id]
+
+
+def validate_source_url(value: str) -> str:
+    """Only HTTPS direct-media URLs on explicitly trusted hosts."""
+    url = urlsplit(value.strip())
+    allowed = {x.strip().lower() for x in os.environ.get("DIRECT_VIDEO_HOSTS", "").split(",") if x.strip()}
+    hostname = (url.hostname or "").lower()
+    if url.scheme != "https" or not hostname or hostname not in allowed or url.username or url.password or url.port not in (None, 443):
+        raise HTTPException(422, "Only HTTPS direct-video links from configured trusted hosts are supported")
+    try:
+        addresses = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+        if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
+            raise ValueError("Non-public address")
+    except (OSError, ValueError):
+        raise HTTPException(422, "Video host could not be validated")
+    return value.strip()
+
+def import_direct_video(url: str, destination: Path):
+    # No redirects: prevents untrusted destination hops.
+    with httpx.Client(follow_redirects=False, timeout=httpx.Timeout(30, read=120), trust_env=False) as client:
+        with client.stream("GET", url, headers={"Accept": "video/*"}) as response:
+            response.raise_for_status()
+            if response.status_code != 200:
+                raise ValueError("Direct media URL did not return a video")
+            mime = response.headers.get("content-type", "").split(";")[0].lower()
+            if mime not in ("video/mp4", "video/quicktime", "application/octet-stream"):
+                raise ValueError("Link is not a direct MP4/MOV media file")
+            total = 0
+            with destination.open("wb") as output:
+                for chunk in response.iter_bytes(1024 * 1024):
+                    total += len(chunk)
+                    if total > MAX_BYTES:
+                        raise ValueError("Linked video exceeds size limit")
+                    output.write(chunk)
+            if not total:
+                raise ValueError("Empty linked video")
+
+def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
+    source = ROOT / job_id / "source.mp4"
+    try:
+        jobs[job_id]["status"] = "importing"
+        import_direct_video(url, source)
+        process(job_id, source, lengths)
+    except Exception:
+        logger.exception("Link import failed for job %s", job_id)
+        jobs[job_id].update(status="failed", error="Video import failed. Verify the direct media link and server configuration.")
+
+@app.post("/api/jobs/from-link", status_code=202)
+def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), authorization: str | None = Header(default=None)):
+    check_token(authorization)
+    validated = validate_source_url(url)
+    try:
+        chosen = tuple(sorted(set(int(x.strip()) for x in lengths.split(","))))
+    except ValueError:
+        raise HTTPException(422, "Invalid clip lengths")
+    if not chosen or any(x not in (30, 60, 1800) for x in chosen):
+        raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
+    job_id = uuid.uuid4().hex
+    with lock:
+        if sum(j["status"] not in ("complete", "failed") for j in jobs.values()) >= MAX_ACTIVE_JOBS:
+            raise HTTPException(429, "Processing capacity reached. Retry later.")
+        jobs[job_id] = {"id": job_id, "status": "queued", "outputs": [], "lengths": list(chosen)}
+    try:
+        (ROOT / job_id).mkdir()
+        threading.Thread(target=process_link, args=(job_id, validated, chosen), daemon=True).start()
+    except Exception:
+        with lock:
+            jobs.pop(job_id, None)
+        shutil.rmtree(ROOT / job_id, ignore_errors=True)
+        raise
     return jobs[job_id]
 
 @app.get("/api/jobs/{job_id}")
