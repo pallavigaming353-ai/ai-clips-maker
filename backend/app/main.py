@@ -7,7 +7,7 @@ import logging
 import shutil
 import ipaddress
 import socket
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 import httpx
 import uuid
 from pathlib import Path
@@ -159,9 +159,25 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
 
 
 def is_youtube_url(value: str) -> bool:
+    """Accept only a single HTTPS YouTube video, never playlists or channel URLs."""
     try:
         parsed = urlsplit(value.strip())
-        return (parsed.scheme == "https" and parsed.hostname in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"} and not parsed.username and not parsed.password and parsed.port in (None, 443))
+        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443):
+            return False
+        host = (parsed.hostname or "").lower()
+        if host not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
+            return False
+        if host == "youtu.be":
+            video_id = parsed.path.strip("/")
+            return bool(video_id) and "/" not in video_id and len(video_id) == 11 and video_id.replace("-", "").replace("_", "").isalnum()
+        if parsed.path == "/watch":
+            query = parse_qs(parsed.query)
+            video_id = query.get("v", [""])[0]
+            return len(video_id) == 11 and video_id.replace("-", "").replace("_", "").isalnum() and "list" not in query
+        if parsed.path.startswith("/shorts/") or parsed.path.startswith("/live/"):
+            video_id = parsed.path.split("/")
+            return len(video_id) == 3 and len(video_id[2]) == 11 and video_id[2].replace("-", "").replace("_", "").isalnum()
+        return False
     except ValueError:
         return False
 
