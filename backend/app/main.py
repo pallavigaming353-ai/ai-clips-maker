@@ -30,6 +30,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET","
 
 # Recover completed jobs after a single-worker restart; interrupted jobs cannot resume.
 import json
+import time
 
 def persist_job(job_id: str):
     job = jobs[job_id]
@@ -40,6 +41,24 @@ def persist_job(job_id: str):
     temporary = folder / "job.json.tmp"
     temporary.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
     temporary.replace(target)
+
+JOB_RETENTION_HOURS = max(1, int(os.environ.get("JOB_RETENTION_HOURS", "24")))
+
+def cleanup_expired_jobs(now: float | None = None):
+    """Delete only terminal jobs older than the configured retention window."""
+    cutoff = (time.time() if now is None else now) - JOB_RETENTION_HOURS * 3600
+    with lock:
+        expired = [
+            job_id for job_id, record in jobs.items()
+            if record.get("status") in ("complete", "failed")
+            and (ROOT / job_id / "job.json").is_file()
+            and (ROOT / job_id / "job.json").stat().st_mtime < cutoff
+        ]
+        for job_id in expired:
+            jobs.pop(job_id, None)
+    for job_id in expired:
+        shutil.rmtree(ROOT / job_id, ignore_errors=True)
+    return len(expired)
 
 def recover_jobs():
     for metadata in ROOT.glob("*/job.json"):
@@ -60,6 +79,7 @@ def recover_jobs():
             logger.warning("Skipping invalid job metadata at %s", metadata)
 
 recover_jobs()
+cleanup_expired_jobs()
 
 def probe(path: Path) -> float:
     result = subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(path)],capture_output=True,text=True,check=True,timeout=30)
