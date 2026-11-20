@@ -24,7 +24,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(windows(speech, 100, 30, limit=1), [70])
 
     def test_long_window(self):
-        self.assertEqual(windows([], 1800, 1800), [0])
+        self.assertEqual(windows([], 1800, 1800), [0])  # exact-length window; process() rejects empty transcripts
 
 if __name__ == "__main__":
     unittest.main()
