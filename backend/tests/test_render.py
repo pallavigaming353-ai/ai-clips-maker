@@ -9,8 +9,7 @@ from app.main import render, probe
 class RenderSmokeTest(unittest.TestCase):
     def test_captioned_video_renders(self):
         filters = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True)
-        if " subtitles " not in filters.stdout:
-            self.skipTest("FFmpeg subtitles/libass filter unavailable")
+        self.assertIn(" subtitles ", filters.stdout, "FFmpeg must include the libass subtitles filter")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "source.mp4"
@@ -24,3 +23,5 @@ class RenderSmokeTest(unittest.TestCase):
                     render(source, target, 0, 1, vertical, subtitle)
                     self.assertTrue(target.is_file())
                     self.assertGreater(target.stat().st_size, 0)
+                    dimensions = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(target)], check=True, capture_output=True, text=True, timeout=30).stdout.strip()
+                    self.assertEqual(dimensions, "1080,1920" if vertical else "1920,1080")
