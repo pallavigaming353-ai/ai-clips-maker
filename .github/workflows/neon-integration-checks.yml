@@ -1,0 +1,37 @@
+name: NeonClipping integration checks
+on:
+  push:
+    branches: [feat/neonclipping-full-import]
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'app/**'
+      - '.github/workflows/neon-integration-checks.yml'
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile backend and original layout module
+        run: python -m py_compile backend/app/main.py backend/app/neon_layouts.py
+      - name: Check layout definitions
+        run: |
+          PYTHONPATH=backend python - <<'PY'
+          from app.neon_layouts import CATALOG,render_graph
+          assert len(CATALOG)==11
+          graph=render_graph("blur",[],width=1080,height=1920)
+          assert "[base]" in graph
+          print("NeonClipping layouts available:",len(CATALOG))
+          PY
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run build
