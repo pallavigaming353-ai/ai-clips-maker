@@ -164,6 +164,19 @@ class ApiTests(unittest.TestCase):
                 self.assertTrue((Path(directory) / active_id).exists())
                 self.assertTrue((Path(directory) / recent_id).exists())
 
+    def test_retention_rejects_untrusted_job_directory_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory) / "unexpected-directory"
+            folder.mkdir()
+            metadata = folder / "job.json"
+            metadata.write_text("{}", encoding="utf-8")
+            old = 1000000000
+            os.utime(metadata, (old, old))
+            with patch.object(main, "ROOT", Path(directory)), patch.dict(main.jobs, {}, clear=True):
+                main.jobs["unexpected-directory"] = {"id": "unexpected-directory", "status": "complete"}
+                self.assertEqual(main.cleanup_expired_jobs(now=2000000000), 0)
+                self.assertTrue(folder.exists())
+
     def test_health(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
