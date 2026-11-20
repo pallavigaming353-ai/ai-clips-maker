@@ -184,6 +184,20 @@ def is_youtube_url(value: str) -> bool:
     except ValueError:
         return False
 
+def canonical_youtube_url(value: str) -> str:
+    """Discard arbitrary query parameters and force one canonical video URL."""
+    if not is_youtube_url(value):
+        raise ValueError("Invalid individual YouTube video URL")
+    parsed = urlsplit(value.strip())
+    host = (parsed.hostname or "").lower()
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/")
+    elif parsed.path == "/watch":
+        video_id = parse_qs(parsed.query)["v"][0]
+    else:
+        video_id = parsed.path.split("/")[2]
+    return "https://www.youtube.com/watch?v=" + video_id
+
 def validate_source_url(value: str) -> str:
     """Only HTTPS direct-media URLs on explicitly trusted hosts."""
     url = urlsplit(value.strip())
@@ -239,11 +253,12 @@ def import_youtube_video(url: str, destination: Path):
         "restrictfilenames": True,
         "windowsfilenames": True,
     }
+    canonical_url = canonical_youtube_url(url)
     with YoutubeDL(options) as downloader:
-        metadata = downloader.extract_info(url, download=False)
+        metadata = downloader.extract_info(canonical_url, download=False)
         if not metadata or metadata.get("_type") == "playlist" or metadata.get("duration") is None or metadata["duration"] > 4 * 3600:
             raise ValueError("Video unavailable or exceeds four hours")
-        downloader.download([url])
+        downloader.download([canonical_url])
     candidates = [p for p in destination.parent.glob("source.*") if p.is_file()]
     if len(candidates) != 1 or candidates[0].stat().st_size > MAX_BYTES:
         raise ValueError("Video import exceeded limits or produced unexpected files")
