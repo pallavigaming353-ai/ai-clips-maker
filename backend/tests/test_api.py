@@ -105,6 +105,31 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(main.jobs[job_id]["status"], "failed")
                 self.assertFalse(folder.exists())
 
+    def test_completed_job_survives_metadata_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job_id = "a" * 32
+            folder = Path(directory) / job_id
+            folder.mkdir()
+            original = {"id": job_id, "status": "complete", "outputs": [], "lengths": [30]}
+            with patch.object(main, "ROOT", Path(directory)), patch.dict(main.jobs, {}, clear=True):
+                main.jobs[job_id] = original
+                main.persist_job(job_id)
+                main.jobs.clear()
+                main.recover_jobs()
+                self.assertEqual(main.jobs[job_id], original)
+
+    def test_interrupted_job_is_marked_failed_after_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job_id = "b" * 32
+            folder = Path(directory) / job_id
+            folder.mkdir()
+            with patch.object(main, "ROOT", Path(directory)), patch.dict(main.jobs, {}, clear=True):
+                main.jobs[job_id] = {"id": job_id, "status": "rendering", "outputs": []}
+                main.persist_job(job_id)
+                main.jobs.clear()
+                main.recover_jobs()
+                self.assertEqual(main.jobs[job_id]["status"], "failed")
+
     def test_health(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
