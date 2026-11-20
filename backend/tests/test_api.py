@@ -60,11 +60,11 @@ class ApiTests(unittest.TestCase):
             def fake_render(source, target, start, length, vertical, subtitles):
                 target.write_bytes(b"rendered")
             segments = [{"start": 0.0, "end": 29.0, "text": "नमस्ते"}]
-            with patch.object(main, "ROOT", Path(directory)), \\
-                 patch.object(main, "import_youtube_video", side_effect=fake_import), \\
-                 patch.object(main, "probe", return_value=30.0), \\
-                 patch.object(main, "transcribe", return_value=segments), \\
-                 patch.object(main, "render", side_effect=fake_render), \\
+            with patch.object(main, "ROOT", Path(directory)), \
+                 patch.object(main, "import_youtube_video", side_effect=fake_import), \
+                 patch.object(main, "probe", return_value=30.0), \
+                 patch.object(main, "transcribe", return_value=segments), \
+                 patch.object(main, "render", side_effect=fake_render), \
                  patch.dict(main.jobs, {job_id: {"id": job_id, "status": "queued", "outputs": []}}):
                 main.process_link(job_id, "https://youtu.be/abc123", (30,))
                 job = main.jobs[job_id]
