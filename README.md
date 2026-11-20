@@ -9,7 +9,7 @@ Implemented in source (not yet integration-tested or deployed):
 - Hindi transcription via faster-whisper (CPU).
 - Deterministic speech-density clip windows of 30 seconds, 60 seconds, and 30 minutes when input is long enough.
 - FFmpeg 9:16 center crop and 16:9 letterbox exports.
-- Separate Hindi SRT files; job polling, HTML video preview, and MP4/SRT downloads.
+- Burned-in Hindi captions (requires FFmpeg libass) plus separate SRT files; job polling, HTML video preview, and MP4/SRT downloads.
 
 **Not implemented:** authorized YouTube import, semantic AI ranking, burned-in subtitles, authentication, cloud object storage, durable queues, job cleanup, production deployment. Processing is memory-local and is lost on restart. Do not expose the backend publicly without auth, quotas, secure storage, and retention controls.
 
@@ -38,4 +38,7 @@ Open http://localhost:3000. The UI defaults to http://localhost:8000 for its API
 
 ## Known limitations
 
-The 30-minute windows are rendered only when the source is at least 30 minutes long. Video crops are center-based, not speaker-tracked. Subtitle output is separate SRT, not burned into MP4. The speech-density algorithm is a baseline, not a guarantee of engaging highlights. A production release requires persistent workers, authenticated access, storage quotas, and automatic deletion.
+The 30-minute windows are rendered only when the source is at least 30 minutes long. Video crops are center-based, not speaker-tracked. Subtitle output is both burned into MP4 and provided as separate SRT when FFmpeg supports the subtitles/libass filter. The speech-density algorithm is a baseline, not a guarantee of engaging highlights. A production release requires persistent workers, authenticated access, storage quotas, and automatic deletion.
+
+## Verification
+GitHub Actions includes Python core tests, an FFmpeg synthetic-video rendering smoke test, and a Next.js build check. CI outcomes have not yet been confirmed. Caption font rendering depends on Hindi-capable fonts installed on the processing host. Optional CLIPPER_API_TOKEN protects API endpoints but the current browser UI does not support token-authenticated preview/download; use only a local trusted development environment until end-to-end user authentication is implemented.
