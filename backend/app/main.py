@@ -3,6 +3,7 @@ import os
 import subprocess
 import threading
 import secrets
+import logging
 import uuid
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile, Header, Form
@@ -14,6 +15,8 @@ ROOT.mkdir(parents=True, exist_ok=True)
 MAX_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(2 * 1024**3)))
 jobs: dict[str, dict] = {}
 lock = threading.Lock()
+MAX_ACTIVE_JOBS = max(1, int(os.environ.get("MAX_ACTIVE_JOBS", "1")))
+logger = logging.getLogger(__name__)
 API_TOKEN = os.environ.get('CLIPPER_API_TOKEN', '')
 app = FastAPI(title="AI Clips Maker API")
 origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -90,8 +93,8 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
                     render(source,target,start,length,vertical,srt)
                     outputs.append({"name":target.name,"duration":length,"start":start,"aspect":aspect,"video":f"/api/jobs/{job_id}/files/{target.name}","srt":f"/api/jobs/{job_id}/files/{srt.name}"})
         jobs[job_id].update(status="complete",outputs=outputs,transcript_segments=len(segments))
-    except Exception as exc:
-        # Never return raw FFmpeg stderr, paths, or stack traces to API callers.
+    except Exception:
+        logger.exception("Processing failed for job %s", job_id)
         jobs[job_id].update(status="failed",error="Processing failed. Check server logs for details.")
 
 @app.get("/api/health")
@@ -106,6 +109,10 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         raise HTTPException(422, "Invalid clip lengths")
     if not chosen or any(x not in (30, 60, 1800) for x in chosen):
         raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
+    with lock:
+        active = sum(j["status"] not in ("complete", "failed") for j in jobs.values())
+        if active >= MAX_ACTIVE_JOBS:
+            raise HTTPException(429, "Processing capacity reached. Retry later.")
     if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
         raise HTTPException(415,"Upload MP4 or MOV")
     job_id=uuid.uuid4().hex
@@ -124,7 +131,8 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         source.unlink(missing_ok=True)
         folder.rmdir()
         raise
-    jobs[job_id]={"id":job_id,"status":"queued","outputs":[],"lengths":list(chosen)}
+    with lock:
+        jobs[job_id]={"id":job_id,"status":"queued","outputs":[],"lengths":list(chosen)}
     threading.Thread(target=process,args=(job_id,source,chosen),daemon=True).start()
     return jobs[job_id]
 
