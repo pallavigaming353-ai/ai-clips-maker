@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 from pathlib import Path
 import unittest
@@ -129,6 +130,24 @@ class ApiTests(unittest.TestCase):
                 main.jobs.clear()
                 main.recover_jobs()
                 self.assertEqual(main.jobs[job_id]["status"], "failed")
+
+    def test_retention_removes_only_expired_terminal_jobs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            old_id, active_id, recent_id = "a" * 32, "b" * 32, "c" * 32
+            with patch.object(main, "ROOT", Path(directory)), patch.dict(main.jobs, {}, clear=True):
+                for job_id, status in [(old_id, "complete"), (active_id, "rendering"), (recent_id, "complete")]:
+                    (Path(directory) / job_id).mkdir()
+                    main.jobs[job_id] = {"id": job_id, "status": status, "outputs": []}
+                    main.persist_job(job_id)
+                now = 2000000000.0
+                stale = now - (main.JOB_RETENTION_HOURS + 2) * 3600
+                os.utime(Path(directory) / old_id / "job.json", (stale, stale))
+                os.utime(Path(directory) / active_id / "job.json", (stale, stale))
+                os.utime(Path(directory) / recent_id / "job.json", (now, now))
+                self.assertEqual(main.cleanup_expired_jobs(now=now), 1)
+                self.assertFalse((Path(directory) / old_id).exists())
+                self.assertTrue((Path(directory) / active_id).exists())
+                self.assertTrue((Path(directory) / recent_id).exists())
 
     def test_health(self):
         response = self.client.get("/api/health")
