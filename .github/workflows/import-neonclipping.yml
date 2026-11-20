@@ -1,0 +1,29 @@
+name: Import complete NeonClipping source
+on:
+  push:
+    branches: [feat/neonclipping-full-import]
+    paths:
+      - '.github/workflows/import-neonclipping.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Clone upstream and copy all source and assets
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/iamajmeena/neonclipping.git /tmp/neonclipping
+          mkdir -p vendor/neonclipping
+          rsync -a --delete --exclude='.git' /tmp/neonclipping/ vendor/neonclipping/
+          git add vendor/neonclipping
+          if git diff --cached --quiet; then
+            echo "Already synchronized"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Vendor full NeonClipping upstream source and assets (MIT)"
+          git push origin HEAD:feat/neonclipping-full-import

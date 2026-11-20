@@ -73,7 +73,7 @@ class ApiTests(unittest.TestCase):
             folder.mkdir()
             def fake_import(url, target):
                 target.write_bytes(b"sample")
-            def fake_render(source, target, start, length, vertical, subtitles):
+            def fake_render(source, target, start, length, vertical, subtitles, layout="fill"):
                 target.write_bytes(b"rendered")
             segments = [{"start": 0.0, "end": 29.0, "text": "नमस्ते"}]
             with patch.object(main, "ROOT", Path(directory)), \
@@ -90,6 +90,12 @@ class ApiTests(unittest.TestCase):
                 for output in job["outputs"]:
                     self.assertTrue((folder / output["name"]).is_file())
                     self.assertTrue((folder / Path(output["srt"]).name).is_file())
+
+    def test_reject_invalid_neon_layout(self):
+        response = self.client.post("/api/jobs/from-link", data={"url": "https://youtu.be/abc123def45", "layout": "invalid"})
+        self.assertEqual(response.status_code, 422)
+        response = self.client.post("/api/jobs", data={"layout": "invalid"}, files={"file": ("test.mp4", io.BytesIO(b"fake"), "video/mp4")})
+        self.assertEqual(response.status_code, 422)
 
     def test_silent_source_fails_and_cleans_up(self):
         with tempfile.TemporaryDirectory() as directory:

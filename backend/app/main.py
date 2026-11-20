@@ -133,8 +133,13 @@ def windows(segments, duration, length, limit=3):
             break
     return sorted(chosen)
 
-def render(source:Path,target:Path,start:int,length:int,vertical:bool,subtitles:Path):
+def render(source:Path,target:Path,start:int,length:int,vertical:bool,subtitles:Path,layout:str="fill"):
     vf=("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" if vertical else "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+    if vertical and layout == "blur":
+        from app.neon_layouts import render_graph
+        vf = render_graph("blur", [], width=1080, height=1920).replace("[0:v]", "[0:v]") + ";[base]subtitles=" + subtitles.name + "[v]"
+        subprocess.run(["ffmpeg","-nostdin","-y","-ss",str(start),"-i",str(source),"-t",str(length),"-filter_complex",vf,"-map","[v]","-map","0:a?","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-movflags","+faststart",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=7200,cwd=str(source.parent))
+        return
     # Relative subtitle filename avoids unsafe interpolation of user-supplied paths.
     # FFmpeg must be built with libass for the subtitles filter.
     vf += ",subtitles=" + subtitles.name
@@ -144,7 +149,7 @@ def check_token(authorization: str | None):
     if API_TOKEN and not secrets.compare_digest(authorization or '', 'Bearer '+API_TOKEN):
         raise HTTPException(401, 'Unauthorized')
 
-def process(job_id:str,source:Path,lengths:tuple[int,...]):
+def process(job_id:str,source:Path,lengths:tuple[int,...],layout:str="fill"):
     try:
         jobs[job_id]["status"]="transcribing"
         duration=probe(source)
@@ -166,7 +171,7 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
                 for vertical in (True,False):
                     aspect="vertical" if vertical else "landscape"
                     target=folder/f"{name}_{aspect}.mp4"
-                    render(source,target,start,length,vertical,srt)
+                    render(source,target,start,length,vertical,srt,layout)
                     outputs.append({"name":target.name,"duration":length,"start":start,"aspect":aspect,"video":f"/api/jobs/{job_id}/files/{target.name}","srt":f"/api/jobs/{job_id}/files/{srt.name}"})
         if not outputs:
             raise ValueError("No suitable speech-containing windows for selected clip lengths")
@@ -198,7 +203,7 @@ def ready(authorization: str | None = Header(default=None)):
     return {"status": "ready", "dependencies": dependencies, "storage_writable": storage}
 
 @app.post("/api/jobs",status_code=202)
-async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60'), authorization: str | None=Header(default=None)):
+async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60'), layout: str=Form(default='fill'), authorization: str | None=Header(default=None)):
     check_token(authorization)
     try:
         chosen = tuple(sorted(set(int(x.strip()) for x in lengths.split(','))))
@@ -206,6 +211,8 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         raise HTTPException(422, "Invalid clip lengths")
     if not chosen or any(x not in (30, 60, 1800) for x in chosen):
         raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
+    if layout not in ("fill","blur"):
+        raise HTTPException(422, "Choose a valid NeonClipping layout")
     if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
         raise HTTPException(415,"Upload MP4 or MOV")
     job_id=uuid.uuid4().hex
@@ -238,7 +245,7 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         raise
     jobs[job_id]["status"]="queued"
     persist_job(job_id)
-    threading.Thread(target=process,args=(job_id,source,chosen),daemon=True).start()
+    threading.Thread(target=process,args=(job_id,source,chosen,layout),daemon=True).start()
     return jobs[job_id]
 
 
@@ -359,7 +366,7 @@ def import_error_message(exc: Exception) -> str:
     return "Video import failed. Check that the source is accessible or upload an authorized MP4/MOV file."
 
 
-def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
+def process_link(job_id: str, url: str, lengths: tuple[int, ...], layout: str = "fill"):
     source = ROOT / job_id / "source.mp4"
     try:
         jobs[job_id]["status"] = "importing"
@@ -367,7 +374,7 @@ def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
             import_youtube_video(url, source)
         else:
             import_direct_video(url, source)
-        process(job_id, source, lengths)
+        process(job_id, source, lengths, layout)
     except Exception as exc:
         logger.exception("Link import failed for job %s", job_id)
         shutil.rmtree(ROOT / job_id, ignore_errors=True)
@@ -376,7 +383,7 @@ def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
         persist_job(job_id)
 
 @app.post("/api/jobs/from-link", status_code=202)
-def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), authorization: str | None = Header(default=None)):
+def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), layout: str = Form(default="fill"), authorization: str | None = Header(default=None)):
     check_token(authorization)
     validated = url.strip() if is_youtube_url(url) else validate_source_url(url)
     try:
@@ -385,6 +392,8 @@ def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), 
         raise HTTPException(422, "Invalid clip lengths")
     if not chosen or any(x not in (30, 60, 1800) for x in chosen):
         raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
+    if layout not in ("fill", "blur"):
+        raise HTTPException(422, "Choose a valid NeonClipping layout")
     job_id = uuid.uuid4().hex
     with lock:
         if sum(j["status"] not in ("complete", "failed") for j in jobs.values()) >= MAX_ACTIVE_JOBS:
@@ -393,7 +402,7 @@ def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), 
     try:
         (ROOT / job_id).mkdir()
         persist_job(job_id)
-        threading.Thread(target=process_link, args=(job_id, validated, chosen), daemon=True).start()
+        threading.Thread(target=process_link, args=(job_id, validated, chosen, layout), daemon=True).start()
     except Exception:
         with lock:
             jobs.pop(job_id, None)
