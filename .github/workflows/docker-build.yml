@@ -6,6 +6,7 @@ on:
       - '.dockerignore'
       - 'compose.yaml'
       - 'app/**'
+      - 'middleware.ts'
       - 'backend/**'
       - 'package.json'
       - 'package-lock.json'
@@ -27,6 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate compose file
+        env:
+          CLIPPER_API_TOKEN: ci-test-token-not-for-production
+          CLIPPER_SITE_USER: ci-owner
+          CLIPPER_SITE_PASSWORD: ci-password-not-for-production
         run: docker compose config --quiet
       - name: Build frontend image
         run: docker build -f Dockerfile.frontend -t ai-clips-maker-web:ci .
