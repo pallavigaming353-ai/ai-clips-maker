@@ -46,3 +46,21 @@ jobs:
           done
           docker logs clipper-api-test
           exit 1
+
+      - name: Smoke-test private website access
+        run: |
+          docker run -d --name clipper-web-test -p 127.0.0.1:13000:3000 \\
+            -e CLIPPER_SITE_USER=ci-owner \\
+            -e CLIPPER_SITE_PASSWORD=ci-password-not-for-production \\
+            -e CLIPPER_API_TOKEN=ci-test-token-not-for-production \\
+            -e CLIPPER_BACKEND_URL=http://127.0.0.1:18000 ai-clips-maker-web:ci
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:13000/ || true)
+            if [ "$code" = "401" ]; then break; fi
+            sleep 2
+          done
+          test "$code" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:wrong http://127.0.0.1:13000/)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:13000/api/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/unknown)" = "404"
