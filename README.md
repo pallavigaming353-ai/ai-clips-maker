@@ -84,3 +84,7 @@ For the API, set `CLIPPER_DATA_DIR=/srv/clipper-data`, `CORS_ORIGINS=https://<fr
 **Deployment blockers before any public launch:** implement real user authentication and job ownership, protect downloads, use a durable job store/queue and retention cleanup, and validate a real YouTube import plus FFmpeg render. Existing in-memory job state is lost on restart; mounted disk alone does not fix it. Render instance, disk, compute, and bandwidth costs must be reviewed and approved before creating services. The frontend's build-time API URL must match the deployed backend origin.
 
 Local development: `docker compose up --build`. This is not a public production configuration.
+
+### Output retention
+
+Completed and failed jobs are eligible for deletion after `JOB_RETENTION_HOURS` (default: 24 hours). Cleanup currently runs **at API startup only**, not continuously. The age is measured from the persisted `job.json` file modification time. Download generated clips promptly; do not treat the output disk as permanent storage. Jobs without persisted metadata are not automatically cleaned by this routine.
