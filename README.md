@@ -92,3 +92,17 @@ Completed and failed jobs are eligible for deletion after `JOB_RETENTION_HOURS` 
 ### Production API safety gate
 
 Set `DEPLOYMENT_ENV=production` and a strong, randomly generated `CLIPPER_API_TOKEN` for the API service. The backend intentionally refuses to start in production mode without the token. **This is not a complete deployment solution:** the current browser frontend does not provide a secure authenticated proxy and will fail to access a token-protected backend. Never put `CLIPPER_API_TOKEN` into `NEXT_PUBLIC_*` variables or browser JavaScript. Implement server-side authenticated forwarding and user access control before public launch. `DEPLOYMENT_ENV` defaults to `development` for local use only.
+
+### Private website authentication (new)
+
+The browser now calls same-origin `/api/*` endpoints. The Next.js server forwards allowed requests to `CLIPPER_BACKEND_URL` and injects `CLIPPER_API_TOKEN` on the server; never expose this token through `NEXT_PUBLIC_*`.
+
+Configure `CLIPPER_SITE_USER`, a strong `CLIPPER_SITE_PASSWORD`, `CLIPPER_BACKEND_URL`, and `CLIPPER_API_TOKEN` as **server-side environment variables**. The website responds with HTTP Basic authentication challenges for `/` and `/api/*`; HTTPS is mandatory outside localhost because Basic credentials are sent on every request. Do not reuse account passwords. This is single-owner access, not multi-user account management, and does not provide per-user job ownership. Rate limiting, audit logging, and full deployment validation remain outstanding.
+
+For local Compose, create a private `.env` file (do not commit it) containing:
+```dotenv
+CLIPPER_API_TOKEN=replace-with-long-random-token
+CLIPPER_SITE_USER=owner
+CLIPPER_SITE_PASSWORD=replace-with-long-random-password
+```
+Then run `docker compose up --build`. The browser connects to http://localhost:3000; the frontend reaches the API at http://api:8000 inside Compose. Production requires HTTPS and secure deployment secrets.
