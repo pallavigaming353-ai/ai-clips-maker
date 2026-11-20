@@ -8,6 +8,8 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       MAX_ACTIVE_JOBS: "1"
       DIRECT_VIDEO_HOSTS: ${DIRECT_VIDEO_HOSTS:-}
+      DEPLOYMENT_ENV: production
+      CLIPPER_API_TOKEN: ${CLIPPER_API_TOKEN:?Set CLIPPER_API_TOKEN in .env}
     volumes:
       - clipper_data:/srv/clipper-data
     ports:
@@ -17,8 +19,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    environment:
+      CLIPPER_BACKEND_URL: http://api:8000
+      CLIPPER_API_TOKEN: ${CLIPPER_API_TOKEN:?Set CLIPPER_API_TOKEN in .env}
+      CLIPPER_SITE_USER: ${CLIPPER_SITE_USER:?Set CLIPPER_SITE_USER in .env}
+      CLIPPER_SITE_PASSWORD: ${CLIPPER_SITE_PASSWORD:?Set CLIPPER_SITE_PASSWORD in .env}
     depends_on:
       - api
     ports:
