@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 type Output={name:string;duration:number;start:number;aspect:string;video:string;srt:string};
 type Job={id:string;status:string;outputs:Output[];error?:string};
-const api=(process.env.NEXT_PUBLIC_API_BASE_URL||"http://localhost:8000").replace(/\/$/,"");
+const api="";
 export default function Home(){
  const [file,setFile]=useState<File|null>(null);
  const [url,setUrl]=useState("");
@@ -27,6 +27,6 @@ export default function Home(){
  {job&&<div role="status" aria-live="polite" style={{marginTop:18,padding:14,borderRadius:12,background:"#202e44"}}><strong>{stages[job.status]||job.status}</strong>{job.error&&<p style={{color:"#ff9898"}}>{job.error}</p>}<p style={{fontSize:12,color:"#a6b5d0",marginBottom:0}}>Job ID: {job.id}</p></div>}
  </section>
  {job?.status==="complete"&&<section style={{marginTop:28}}><h2>Generated clips</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:18}}>{job.outputs.map(o=><article key={o.name} style={{background:"#131d30",borderRadius:16,padding:16}}><h3>{o.duration}s · {o.aspect}</h3><video controls preload="metadata" src={api+o.video} style={{width:"100%",maxHeight:330,background:"black"}}/><p><a href={api+o.video} style={{color:"#7bd8ff"}}>Download MP4</a> · <a href={api+o.srt} style={{color:"#7bd8ff"}}>Download Hindi SRT</a></p></article>)}</div>{job.outputs.length===0&&<p>No clips were generated. Video may be shorter than the selected durations.</p>}</section>}
- <p style={{color:"#8998b0",fontSize:13,marginTop:28}}>Development preview: use only videos you own or are authorized to process. Backend must be running separately; uploads are not private-user authenticated yet.</p>
+ <p style={{color:"#8998b0",fontSize:13,marginTop:28}}>Development preview: use only videos you own or are authorized to process. Private preview: access requires owner credentials; backend must be configured server-side.</p>
  </main>;
 }
