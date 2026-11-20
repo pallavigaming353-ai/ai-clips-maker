@@ -58,8 +58,10 @@ def windows(segments, duration, length, limit=3):
 
 def render(source:Path,target:Path,start:int,length:int,vertical:bool,subtitles:Path):
     vf=("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" if vertical else "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
-    # Captions are exported as separate SRT, not burned into the MP4 in this milestone.
-    subprocess.run(["ffmpeg","-nostdin","-y","-ss",str(start),"-i",str(source),"-t",str(length),"-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-movflags","+faststart",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=7200)
+    # Relative subtitle filename avoids unsafe interpolation of user-supplied paths.
+    # FFmpeg must be built with libass for the subtitles filter.
+    vf += ",subtitles=" + subtitles.name + ":force_style=FontSize=20,Outline=2,Shadow=1"
+    subprocess.run(["ffmpeg","-nostdin","-y","-ss",str(start),"-i",str(source),"-t",str(length),"-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-movflags","+faststart",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=7200,cwd=str(source.parent))
 
 def check_token(authorization: str | None):
     if API_TOKEN and not secrets.compare_digest(authorization or '', 'Bearer '+API_TOKEN):
@@ -89,7 +91,8 @@ def process(job_id:str,source:Path):
                     outputs.append({"name":target.name,"duration":length,"start":start,"aspect":aspect,"video":f"/api/jobs/{job_id}/files/{target.name}","srt":f"/api/jobs/{job_id}/files/{srt.name}"})
         jobs[job_id].update(status="complete",outputs=outputs,transcript_segments=len(segments))
     except Exception as exc:
-        jobs[job_id].update(status="failed",error=str(exc)[:500])
+        # Never return raw FFmpeg stderr, paths, or stack traces to API callers.
+        jobs[job_id].update(status="failed",error="Processing failed. Check server logs for details.")
 
 @app.get("/api/health")
 def health(): return {"status":"ok"}
