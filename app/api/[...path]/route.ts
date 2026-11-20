@@ -24,6 +24,10 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   const target = base.replace(/\/$/, "") + "/api/" + path.map(encodeURIComponent).join("/");
   try {
     const headers = new Headers({ authorization: "Bearer " + token });
+    if (request.method === "GET" && path.length === 4) {
+      const range = request.headers.get("range");
+      if (range && /^bytes=\d*-\d*(?:,\d*-\d*)*$/.test(range)) headers.set("range", range);
+    }
     const init: RequestInit = { method: request.method, headers, cache: "no-store", redirect: "manual" };
     if (request.method === "POST") {
       const contentType = request.headers.get("content-type");
