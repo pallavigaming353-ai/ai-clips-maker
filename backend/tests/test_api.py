@@ -98,9 +98,9 @@ class ApiTests(unittest.TestCase):
             folder.mkdir()
             source = folder / "source.mp4"
             source.write_bytes(b"fake")
-            with patch.object(main, "ROOT", Path(directory)), \\
-                 patch.object(main, "probe", return_value=60.0), \\
-                 patch.object(main, "transcribe", return_value=[]), \\
+            with patch.object(main, "ROOT", Path(directory)), \
+                 patch.object(main, "probe", return_value=60.0), \
+                 patch.object(main, "transcribe", return_value=[]), \
                  patch.dict(main.jobs, {job_id: {"id": job_id, "status": "queued", "outputs": []}}):
                 main.process(job_id, source, (30,))
                 self.assertEqual(main.jobs[job_id]["status"], "failed")
