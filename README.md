@@ -69,3 +69,18 @@ Open `http://localhost:3000` in a browser on the same computer. The FastAPI heal
 **Important:** This setup binds both services to the local loopback interface only. It is not a public deployment and is not directly accessible from an iPhone on another device. Do not expose this development stack to the internet without adding proper user authentication, job ownership, download authorization, resource quotas, and secure ingress. The optional backend bearer token is not wired into the frontend.
 
 YouTube imports are best-effort and may be blocked by platform restrictions. Download and process only content you are authorized to use. Long videos require substantial disk space, CPU time, and memory.
+
+## Render deployment preparation (not deployed)
+
+Selected Render workspace: **Test's workspace**. No services have been created.
+
+The application requires **two separate web services**:
+
+1. **API processor**: Docker runtime, repository `pallavigaming353-ai/ai-clips-maker`, branch `main`, Dockerfile `backend/Dockerfile`, build context `backend`. Requires FFmpeg, CPU/memory for faster-whisper, and persistent writable disk at `/srv/clipper-data`.
+2. **Next.js frontend**: Docker runtime, same repository and branch, Dockerfile `Dockerfile.frontend`, build context `.`. Set build argument `NEXT_PUBLIC_API_BASE_URL` to the final public HTTPS backend URL **before building**.
+
+For the API, set `CLIPPER_DATA_DIR=/srv/clipper-data`, `CORS_ORIGINS=https://<frontend-host>`, `MAX_ACTIVE_JOBS=1`, and `WHISPER_MODEL=small`. Never commit secrets. The existing browser frontend does **not** send `CLIPPER_API_TOKEN`, so enabling that token would currently block its API calls.
+
+**Deployment blockers before any public launch:** implement real user authentication and job ownership, protect downloads, use a durable job store/queue and retention cleanup, and validate a real YouTube import plus FFmpeg render. Existing in-memory job state is lost on restart; mounted disk alone does not fix it. Render instance, disk, compute, and bandwidth costs must be reviewed and approved before creating services. The frontend's build-time API URL must match the deployed backend origin.
+
+Local development: `docker compose up --build`. This is not a public production configuration.
