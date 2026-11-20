@@ -1,4 +1,6 @@
 import io
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -18,6 +20,35 @@ class ApiTests(unittest.TestCase):
     def test_youtube_link_job_invalid_duration(self):
         response = self.client.post("/api/jobs/from-link", data={"url": "https://youtu.be/abc123", "lengths": "999"})
         self.assertEqual(response.status_code, 422)
+
+    def test_youtube_import_uses_single_mp4(self):
+        class FakeDownloader:
+            def __init__(self, options):
+                self.options = options
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def extract_info(self, url, download=False):
+                return {"duration": 120, "id": "abc123"}
+            def download(self, urls):
+                Path(self.options["outtmpl"].replace("%(ext)s", "mp4")).write_bytes(b"fake mp4")
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "source.mp4"
+            with patch("yt_dlp.YoutubeDL", FakeDownloader):
+                main.import_youtube_video("https://youtu.be/abc123", target)
+            self.assertEqual(target.read_bytes(), b"fake mp4")
+
+    def test_youtube_import_rejects_long_video(self):
+        class FakeDownloader:
+            def __init__(self, options): pass
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def extract_info(self, url, download=False): return {"duration": 20000}
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("yt_dlp.YoutubeDL", FakeDownloader):
+                with self.assertRaises(ValueError):
+                    main.import_youtube_video("https://youtu.be/abc123", Path(directory) / "source.mp4")
 
     def test_health(self):
         response = self.client.get("/api/health")
