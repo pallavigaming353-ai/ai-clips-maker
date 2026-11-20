@@ -174,7 +174,9 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
     except Exception:
         logger.exception("Processing failed for job %s", job_id)
         shutil.rmtree(source.parent, ignore_errors=True)
-        jobs[job_id].update(status="failed",error="Processing failed. Check server logs for details.")
+        source.parent.mkdir(parents=True, exist_ok=True)
+        jobs[job_id].update(status="failed",error="Processing failed. Check server logs for details.",outputs=[])
+        persist_job(job_id)
 
 @app.get("/api/health")
 def health():
@@ -355,7 +357,9 @@ def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
     except Exception:
         logger.exception("Link import failed for job %s", job_id)
         shutil.rmtree(ROOT / job_id, ignore_errors=True)
-        jobs[job_id].update(status="failed", error="Video import failed. Verify the video link and server configuration.")
+        (ROOT / job_id).mkdir(parents=True, exist_ok=True)
+        jobs[job_id].update(status="failed", error="Video import failed. Verify the video link and server configuration.",outputs=[])
+        persist_job(job_id)
 
 @app.post("/api/jobs/from-link", status_code=202)
 def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), authorization: str | None = Header(default=None)):
