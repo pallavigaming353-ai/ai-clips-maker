@@ -88,3 +88,7 @@ Local development: `docker compose up --build`. This is not a public production 
 ### Output retention
 
 Completed and failed jobs are eligible for deletion after `JOB_RETENTION_HOURS` (default: 24 hours). Cleanup currently runs **at API startup only**, not continuously. The age is measured from the persisted `job.json` file modification time. Download generated clips promptly; do not treat the output disk as permanent storage. Jobs without persisted metadata are not automatically cleaned by this routine.
+
+### Production API safety gate
+
+Set `DEPLOYMENT_ENV=production` and a strong, randomly generated `CLIPPER_API_TOKEN` for the API service. The backend intentionally refuses to start in production mode without the token. **This is not a complete deployment solution:** the current browser frontend does not provide a secure authenticated proxy and will fail to access a token-protected backend. Never put `CLIPPER_API_TOKEN` into `NEXT_PUBLIC_*` variables or browser JavaScript. Implement server-side authenticated forwarding and user access control before public launch. `DEPLOYMENT_ENV` defaults to `development` for local use only.
