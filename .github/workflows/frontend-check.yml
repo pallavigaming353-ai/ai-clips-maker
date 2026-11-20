@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'app/**'
+      - 'middleware.ts'
       - 'package.json'
       - 'tsconfig.json'
       - '.github/workflows/frontend-check.yml'
