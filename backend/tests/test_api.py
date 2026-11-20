@@ -50,6 +50,30 @@ class ApiTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     main.import_youtube_video("https://youtu.be/abc123", Path(directory) / "source.mp4")
 
+    def test_link_pipeline_produces_registered_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job_id = "integrationtest"
+            folder = Path(directory) / job_id
+            folder.mkdir()
+            def fake_import(url, target):
+                target.write_bytes(b"sample")
+            def fake_render(source, target, start, length, vertical, subtitles):
+                target.write_bytes(b"rendered")
+            segments = [{"start": 0.0, "end": 29.0, "text": "नमस्ते"}]
+            with patch.object(main, "ROOT", Path(directory)), \\
+                 patch.object(main, "import_youtube_video", side_effect=fake_import), \\
+                 patch.object(main, "probe", return_value=30.0), \\
+                 patch.object(main, "transcribe", return_value=segments), \\
+                 patch.object(main, "render", side_effect=fake_render), \\
+                 patch.dict(main.jobs, {job_id: {"id": job_id, "status": "queued", "outputs": []}}):
+                main.process_link(job_id, "https://youtu.be/abc123", (30,))
+                job = main.jobs[job_id]
+                self.assertEqual(job["status"], "complete", job.get("error"))
+                self.assertEqual(len(job["outputs"]), 2)
+                for output in job["outputs"]:
+                    self.assertTrue((folder / output["name"]).is_file())
+                    self.assertTrue((folder / Path(output["srt"]).name).is_file())
+
     def test_health(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
