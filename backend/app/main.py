@@ -76,7 +76,7 @@ def process(job_id:str,source:Path):
                 with srt.open("w",encoding="utf-8") as f:
                     for n,s in enumerate(subset,1):
                         a=max(0,s["start"]-start); b=min(length,s["end"]-start)
-                        f.write(f"{n}\\n{srt_time(a)} --> {srt_time(b)}\\n{s['text']}\\n\\n")
+                        f.write(f"{n}\n{srt_time(a)} --> {srt_time(b)}\n{s['text']}\n\n")
                 for vertical in (True,False):
                     aspect="vertical" if vertical else "landscape"
                     target=folder/f"{name}_{aspect}.mp4"
