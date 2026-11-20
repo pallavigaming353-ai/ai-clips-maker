@@ -207,6 +207,9 @@ def import_youtube_video(url: str, destination: Path):
         "no_warnings": True,
         "ignoreerrors": False,
         "extract_flat": False,
+        "skip_download": False,
+        "restrictfilenames": True,
+        "windowsfilenames": True,
     }
     with YoutubeDL(options) as downloader:
         metadata = downloader.extract_info(url, download=False)
@@ -232,7 +235,8 @@ def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
         process(job_id, source, lengths)
     except Exception:
         logger.exception("Link import failed for job %s", job_id)
-        jobs[job_id].update(status="failed", error="Video import failed. Verify the direct media link and server configuration.")
+        shutil.rmtree(ROOT / job_id, ignore_errors=True)
+        jobs[job_id].update(status="failed", error="Video import failed. Verify the video link and server configuration.")
 
 @app.post("/api/jobs/from-link", status_code=202)
 def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), authorization: str | None = Header(default=None)):
