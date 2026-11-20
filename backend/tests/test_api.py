@@ -11,14 +11,17 @@ class ApiTests(unittest.TestCase):
         self.client = TestClient(main.app)
 
     def test_youtube_url_validation(self):
-        self.assertTrue(main.is_youtube_url("https://www.youtube.com/watch?v=abc123"))
-        self.assertTrue(main.is_youtube_url("https://youtu.be/abc123"))
-        self.assertFalse(main.is_youtube_url("http://youtube.com/watch?v=abc123"))
-        self.assertFalse(main.is_youtube_url("https://youtube.com.evil.example/watch?v=abc123"))
-        self.assertFalse(main.is_youtube_url("https://youtube.com:444/watch?v=abc123"))
+        self.assertTrue(main.is_youtube_url("https://www.youtube.com/watch?v=abc123def45"))
+        self.assertTrue(main.is_youtube_url("https://youtu.be/abc123def45"))
+        self.assertFalse(main.is_youtube_url("http://youtube.com/watch?v=abc123def45"))
+        self.assertFalse(main.is_youtube_url("https://youtube.com.evil.example/watch?v=abc123def45"))
+        self.assertFalse(main.is_youtube_url("https://youtube.com:444/watch?v=abc123def45"))
+        self.assertFalse(main.is_youtube_url("https://www.youtube.com/playlist?list=PL123"))
+        self.assertFalse(main.is_youtube_url("https://www.youtube.com/watch?v=abc123def45&list=PL123"))
+        self.assertTrue(main.is_youtube_url("https://www.youtube.com/shorts/abc123def45"))
 
     def test_youtube_link_job_invalid_duration(self):
-        response = self.client.post("/api/jobs/from-link", data={"url": "https://youtu.be/abc123", "lengths": "999"})
+        response = self.client.post("/api/jobs/from-link", data={"url": "https://youtu.be/abc123def45", "lengths": "999"})
         self.assertEqual(response.status_code, 422)
 
     def test_youtube_import_uses_single_mp4(self):
@@ -30,13 +33,13 @@ class ApiTests(unittest.TestCase):
             def __exit__(self, *args):
                 return False
             def extract_info(self, url, download=False):
-                return {"duration": 120, "id": "abc123"}
+                return {"duration": 120, "id": "abc123def45"}
             def download(self, urls):
                 Path(self.options["outtmpl"].replace("%(ext)s", "mp4")).write_bytes(b"fake mp4")
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "source.mp4"
             with patch("yt_dlp.YoutubeDL", FakeDownloader):
-                main.import_youtube_video("https://youtu.be/abc123", target)
+                main.import_youtube_video("https://youtu.be/abc123def45", target)
             self.assertEqual(target.read_bytes(), b"fake mp4")
 
     def test_youtube_import_rejects_long_video(self):
@@ -48,7 +51,7 @@ class ApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with patch("yt_dlp.YoutubeDL", FakeDownloader):
                 with self.assertRaises(ValueError):
-                    main.import_youtube_video("https://youtu.be/abc123", Path(directory) / "source.mp4")
+                    main.import_youtube_video("https://youtu.be/abc123def45", Path(directory) / "source.mp4")
 
     def test_link_pipeline_produces_registered_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -66,7 +69,7 @@ class ApiTests(unittest.TestCase):
                  patch.object(main, "transcribe", return_value=segments), \
                  patch.object(main, "render", side_effect=fake_render), \
                  patch.dict(main.jobs, {job_id: {"id": job_id, "status": "queued", "outputs": []}}):
-                main.process_link(job_id, "https://youtu.be/abc123", (30,))
+                main.process_link(job_id, "https://youtu.be/abc123def45", (30,))
                 job = main.jobs[job_id]
                 self.assertEqual(job["status"], "complete", job.get("error"))
                 self.assertEqual(len(job["outputs"]), 2)
