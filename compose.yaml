@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: ./backend
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CLIPPER_DATA_DIR: /data
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      MAX_ACTIVE_JOBS: "1"
+      DIRECT_VIDEO_HOSTS: ${DIRECT_VIDEO_HOSTS:-}
+    volumes:
+      - clipper_data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+volumes:
+  clipper_data:
