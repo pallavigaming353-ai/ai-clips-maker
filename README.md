@@ -5,13 +5,17 @@ Web-only video clip maker: Next.js frontend and FastAPI video-processing backend
 ## Current milestone
 
 Implemented in source (not yet integration-tested or deployed):
-- MP4/MOV upload to local FastAPI server (2 GiB default limit).
+- Paste-link-first UI and backend direct MP4/MOV import from explicitly configured trusted HTTPS hosts (not YouTube watch pages).\n- MP4/MOV upload fallback to local FastAPI server (2 GiB default limit).
 - Hindi transcription via faster-whisper (CPU).
 - User-selectable deterministic speech-density clip windows of 30 seconds, 60 seconds, and 30 minutes when input is long enough (30 and 60 seconds selected by default).
 - FFmpeg 9:16 center crop and 16:9 letterbox exports.
 - Burned-in Hindi captions (requires FFmpeg libass) plus separate SRT files; job polling, HTML video preview, and MP4/SRT downloads.
 
-**Not implemented:** authorized YouTube import, semantic AI ranking, burned-in subtitles, authentication, cloud object storage, durable queues, job cleanup, production deployment. Processing is memory-local and is lost on restart. Do not expose the backend publicly without auth, quotas, secure storage, and retention controls.
+**Not implemented:** authorized YouTube watch-link import, semantic AI ranking, authentication, cloud object storage, durable queues, job cleanup, production deployment. Processing is memory-local and is lost on restart. Do not expose the backend publicly without auth, quotas, secure storage, and retention controls.
+
+## Link import configuration
+
+Set `DIRECT_VIDEO_HOSTS=your-trusted-cdn.example` in the backend environment to permit direct HTTPS MP4/MOV URLs from that exact host. No hosts are enabled by default. Do not add arbitrary user-provided hosts or private/internal services. The current URL importer is an initial implementation and has not undergone SSRF penetration testing; DNS rebinding and network-level egress controls require additional hardening before public exposure. Standard YouTube watch links are **not** direct media URLs and are not supported by this endpoint. Use only sources you own or have permission to process.
 
 ## Local development
 
