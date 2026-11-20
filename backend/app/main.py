@@ -51,6 +51,7 @@ def cleanup_expired_jobs(now: float | None = None):
         expired = [
             job_id for job_id, record in jobs.items()
             if record.get("status") in ("complete", "failed")
+            and len(job_id) == 32 and all(c in "0123456789abcdef" for c in job_id)
             and (ROOT / job_id / "job.json").is_file()
             and (ROOT / job_id / "job.json").stat().st_mtime < cutoff
         ]
