@@ -7,7 +7,7 @@ Web-only video clip maker: Next.js frontend and FastAPI video-processing backend
 Implemented in source (not yet integration-tested or deployed):
 - MP4/MOV upload to local FastAPI server (2 GiB default limit).
 - Hindi transcription via faster-whisper (CPU).
-- Deterministic speech-density clip windows of 30 seconds, 60 seconds, and 30 minutes when input is long enough.
+- User-selectable deterministic speech-density clip windows of 30 seconds, 60 seconds, and 30 minutes when input is long enough (30 and 60 seconds selected by default).
 - FFmpeg 9:16 center crop and 16:9 letterbox exports.
 - Burned-in Hindi captions (requires FFmpeg libass) plus separate SRT files; job polling, HTML video preview, and MP4/SRT downloads.
 
