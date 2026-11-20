@@ -1,0 +1,43 @@
+name: Docker build validation
+on:
+  push:
+    paths:
+      - 'Dockerfile.frontend'
+      - '.dockerignore'
+      - 'compose.yaml'
+      - 'app/**'
+      - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker-build.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile.frontend'
+      - '.dockerignore'
+      - 'compose.yaml'
+      - 'app/**'
+      - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker-build.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose config --quiet
+      - name: Build frontend image
+        run: docker build -f Dockerfile.frontend -t ai-clips-maker-web:ci .
+      - name: Build backend image
+        run: docker build -f backend/Dockerfile -t ai-clips-maker-api:ci backend
+      - name: Smoke-test backend health
+        run: |
+          docker run -d --name clipper-api-test -p 127.0.0.1:18000:8000 ai-clips-maker-api:ci
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18000/api/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs clipper-api-test
+          exit 1
