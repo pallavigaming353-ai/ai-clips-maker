@@ -70,3 +70,11 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/unknown)" = "404"
           test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)" = "404"
           test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/jobs/from-link)" = "404"
+          # Verify multipart POST travels through the authenticated proxy to FastAPI.
+          # Invalid URL must be rejected by the backend with 422, not by the proxy with 502.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production \
+            -F 'url=http://invalid.example/video.mp4' -F 'lengths=30' \
+            http://127.0.0.1:13000/api/jobs/from-link)" = "422"
+          # A valid owner login must not permit arbitrary API paths.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production \
+            -X POST http://127.0.0.1:13000/api/unknown)" = "404"
