@@ -104,7 +104,11 @@ class ApiTests(unittest.TestCase):
                  patch.dict(main.jobs, {job_id: {"id": job_id, "status": "queued", "outputs": []}}):
                 main.process(job_id, source, (30,))
                 self.assertEqual(main.jobs[job_id]["status"], "failed")
-                self.assertFalse(folder.exists())
+                self.assertTrue((folder / "job.json").exists())
+                self.assertFalse(source.exists())
+                main.jobs.clear()
+                main.recover_jobs()
+                self.assertEqual(main.jobs[job_id]["status"], "failed")
 
     def test_completed_job_survives_metadata_recovery(self):
         with tempfile.TemporaryDirectory() as directory:
