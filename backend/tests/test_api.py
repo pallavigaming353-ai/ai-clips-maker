@@ -131,6 +131,21 @@ class ApiTests(unittest.TestCase):
                 main.recover_jobs()
                 self.assertEqual(main.jobs[job_id]["status"], "failed")
 
+    def test_recovery_preserves_completed_job_retention_timestamp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job_id = "d" * 32
+            folder = Path(directory) / job_id
+            folder.mkdir()
+            with patch.object(main, "ROOT", Path(directory)), patch.dict(main.jobs, {}, clear=True):
+                main.jobs[job_id] = {"id": job_id, "status": "complete", "outputs": []}
+                main.persist_job(job_id)
+                metadata = folder / "job.json"
+                timestamp = 1000000000
+                os.utime(metadata, (timestamp, timestamp))
+                main.jobs.clear()
+                main.recover_jobs()
+                self.assertEqual(metadata.stat().st_mtime, timestamp)
+
     def test_retention_removes_only_expired_terminal_jobs(self):
         with tempfile.TemporaryDirectory() as directory:
             old_id, active_id, recent_id = "a" * 32, "b" * 32, "c" * 32
