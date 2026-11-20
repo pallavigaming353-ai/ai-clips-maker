@@ -4,12 +4,12 @@ services:
       context: ./backend
     environment:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      CLIPPER_DATA_DIR: /data
+      CLIPPER_DATA_DIR: /srv/clipper-data
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       MAX_ACTIVE_JOBS: "1"
       DIRECT_VIDEO_HOSTS: ${DIRECT_VIDEO_HOSTS:-}
     volumes:
-      - clipper_data:/data
+      - clipper_data:/srv/clipper-data
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
