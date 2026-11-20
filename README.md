@@ -55,3 +55,17 @@ docker run --rm -p 127.0.0.1:8000:8000 -e MAX_ACTIVE_JOBS=1 ai-clips-maker-api
 ```
 
 The container includes FFmpeg and Noto fonts for Devanagari captions. This is a **local test configuration**, not a public deployment recipe. Production still needs authenticated sessions, protected file delivery, a durable queue, cleanup policies, resource isolation, and storage persistence. MAX_ACTIVE_JOBS currently limits accepted active jobs in a single process and does not provide distributed admission control. Do not run multiple workers as a workaround.
+
+## Run the website and processor together (local development)
+
+Install Docker Engine with the Compose plugin, then from the repository root:
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:3000` in a browser on the same computer. The FastAPI health endpoint is `http://localhost:8000/api/health`. The backend stores imported media and generated clips in the persistent `clipper_data` Docker volume.
+
+**Important:** This setup binds both services to the local loopback interface only. It is not a public deployment and is not directly accessible from an iPhone on another device. Do not expose this development stack to the internet without adding proper user authentication, job ownership, download authorization, resource quotas, and secure ingress. The optional backend bearer token is not wired into the frontend.
+
+YouTube imports are best-effort and may be blocked by platform restrictions. Download and process only content you are authorized to use. Long videos require substantial disk space, CPU time, and memory.
