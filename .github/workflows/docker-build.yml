@@ -17,6 +17,7 @@ on:
       - '.dockerignore'
       - 'compose.yaml'
       - 'app/**'
+      - 'middleware.ts'
       - 'backend/**'
       - 'package.json'
       - 'package-lock.json'
