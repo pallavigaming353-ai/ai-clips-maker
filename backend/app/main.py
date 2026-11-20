@@ -69,12 +69,14 @@ def recover_jobs():
                 continue
             if record.get("id") != job_id:
                 continue
-            if record.get("status") not in ("complete", "failed"):
+            interrupted = record.get("status") not in ("complete", "failed")
+            if interrupted:
                 record["status"] = "failed"
                 record["error"] = "Processing interrupted by server restart. Submit the video again."
                 record["outputs"] = []
             jobs[job_id] = record
-            persist_job(job_id)
+            if interrupted:
+                persist_job(job_id)
         except (OSError, ValueError, TypeError):
             logger.warning("Skipping invalid job metadata at %s", metadata)
 
