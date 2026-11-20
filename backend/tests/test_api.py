@@ -73,6 +73,7 @@ class ApiTests(unittest.TestCase):
                 job = main.jobs[job_id]
                 self.assertEqual(job["status"], "complete", job.get("error"))
                 self.assertEqual(len(job["outputs"]), 2)
+                self.assertFalse((folder / "source.mp4").exists(), "Imported source should be deleted after rendering")
                 for output in job["outputs"]:
                     self.assertTrue((folder / output["name"]).is_file())
                     self.assertTrue((folder / Path(output["srt"]).name).is_file())
