@@ -348,6 +348,17 @@ def import_youtube_video(url: str, destination: Path):
     if candidates[0] != destination:
         candidates[0].rename(destination)
 
+def import_error_message(exc: Exception) -> str:
+    """Return actionable, non-sensitive guidance for expected import failures."""
+    message = str(exc).lower()
+    if "sign in to confirm you" in message and "bot" in message:
+        return ("YouTube blocked automated access from this hosting server. "
+                "Try an authorized MP4/MOV upload instead. Do not provide your YouTube password or cookies.")
+    if "video unavailable" in message or "private video" in message:
+        return "This video is unavailable to the server. Use an authorized MP4/MOV upload."
+    return "Video import failed. Check that the source is accessible or upload an authorized MP4/MOV file."
+
+
 def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
     source = ROOT / job_id / "source.mp4"
     try:
@@ -357,11 +368,11 @@ def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
         else:
             import_direct_video(url, source)
         process(job_id, source, lengths)
-    except Exception:
+    except Exception as exc:
         logger.exception("Link import failed for job %s", job_id)
         shutil.rmtree(ROOT / job_id, ignore_errors=True)
         (ROOT / job_id).mkdir(parents=True, exist_ok=True)
-        jobs[job_id].update(status="failed", error="Video import failed. Verify the video link and server configuration.",outputs=[])
+        jobs[job_id].update(status="failed", error=import_error_message(exc),outputs=[])
         persist_job(job_id)
 
 @app.post("/api/jobs/from-link", status_code=202)
