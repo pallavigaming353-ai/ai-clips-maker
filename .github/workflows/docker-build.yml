@@ -39,9 +39,12 @@ jobs:
         run: docker build -f backend/Dockerfile -t ai-clips-maker-api:ci backend
       - name: Smoke-test backend health
         run: |
-          docker run -d --name clipper-api-test -p 127.0.0.1:18000:8000 ai-clips-maker-api:ci
+          docker network create clipper-ci
+          docker run -d --name clipper-api-test --network clipper-ci -p 127.0.0.1:18000:8000 \
+            -e DEPLOYMENT_ENV=production \
+            -e CLIPPER_API_TOKEN=ci-test-token-not-for-production ai-clips-maker-api:ci
           for i in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:18000/api/ready; then exit 0; fi
+            if curl --fail --silent -H "Authorization: Bearer ci-test-token-not-for-production" http://127.0.0.1:18000/api/ready; then exit 0; fi
             sleep 2
           done
           docker logs clipper-api-test
@@ -49,11 +52,11 @@ jobs:
 
       - name: Smoke-test private website access
         run: |
-          docker run -d --name clipper-web-test -p 127.0.0.1:13000:3000 \
+          docker run -d --name clipper-web-test --network clipper-ci -p 127.0.0.1:13000:3000 \
             -e CLIPPER_SITE_USER=ci-owner \
             -e CLIPPER_SITE_PASSWORD=ci-password-not-for-production \
             -e CLIPPER_API_TOKEN=ci-test-token-not-for-production \
-            -e CLIPPER_BACKEND_URL=http://127.0.0.1:18000 ai-clips-maker-web:ci
+            -e CLIPPER_BACKEND_URL=http://clipper-api-test:8000 ai-clips-maker-web:ci
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:13000/ || true)
             if [ "$code" = "401" ]; then break; fi
@@ -64,3 +67,5 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/)" = "200"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:13000/api/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/unknown)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u ci-owner:ci-password-not-for-production http://127.0.0.1:13000/api/jobs/from-link)" = "404"
