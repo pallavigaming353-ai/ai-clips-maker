@@ -8,6 +8,17 @@ class ApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(main.app)
 
+    def test_youtube_url_validation(self):
+        self.assertTrue(main.is_youtube_url("https://www.youtube.com/watch?v=abc123"))
+        self.assertTrue(main.is_youtube_url("https://youtu.be/abc123"))
+        self.assertFalse(main.is_youtube_url("http://youtube.com/watch?v=abc123"))
+        self.assertFalse(main.is_youtube_url("https://youtube.com.evil.example/watch?v=abc123"))
+        self.assertFalse(main.is_youtube_url("https://youtube.com:444/watch?v=abc123"))
+
+    def test_youtube_link_job_invalid_duration(self):
+        response = self.client.post("/api/jobs/from-link", data={"url": "https://youtu.be/abc123", "lengths": "999"})
+        self.assertEqual(response.status_code, 422)
+
     def test_health(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
