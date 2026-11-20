@@ -211,7 +211,9 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         raise HTTPException(422, "Invalid clip lengths")
     if not chosen or any(x not in (30, 60, 1800) for x in chosen):
         raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
-    if layout not in ("fill","blur"):\n        raise HTTPException(422, "Choose a valid NeonClipping layout")\n    if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
+    if layout not in ("fill","blur"):
+        raise HTTPException(422, "Choose a valid NeonClipping layout")
+    if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
         raise HTTPException(415,"Upload MP4 or MOV")
     job_id=uuid.uuid4().hex
     folder=ROOT/job_id
