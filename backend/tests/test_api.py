@@ -20,6 +20,18 @@ class ApiTests(unittest.TestCase):
         self.assertFalse(main.is_youtube_url("https://www.youtube.com/watch?v=abc123def45&list=PL123"))
         self.assertTrue(main.is_youtube_url("https://www.youtube.com/shorts/abc123def45"))
 
+    def test_youtube_canonicalization(self):
+        self.assertEqual(
+            main.canonical_youtube_url("https://youtu.be/abc123def45?t=90"),
+            "https://www.youtube.com/watch?v=abc123def45",
+        )
+        self.assertEqual(
+            main.canonical_youtube_url("https://www.youtube.com/shorts/abc123def45?feature=share"),
+            "https://www.youtube.com/watch?v=abc123def45",
+        )
+        with self.assertRaises(ValueError):
+            main.canonical_youtube_url("https://www.youtube.com/playlist?list=PL123")
+
     def test_youtube_link_job_invalid_duration(self):
         response = self.client.post("/api/jobs/from-link", data={"url": "https://youtu.be/abc123def45", "lengths": "999"})
         self.assertEqual(response.status_code, 422)
