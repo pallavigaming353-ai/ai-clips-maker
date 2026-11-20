@@ -27,6 +27,40 @@ app = FastAPI(title="AI Clips Maker API")
 origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET","POST"], allow_headers=["*"])
 
+
+# Recover completed jobs after a single-worker restart; interrupted jobs cannot resume.
+import json
+
+def persist_job(job_id: str):
+    job = jobs[job_id]
+    folder = ROOT / job_id
+    if not folder.is_dir():
+        return
+    target = folder / "job.json"
+    temporary = folder / "job.json.tmp"
+    temporary.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+    temporary.replace(target)
+
+def recover_jobs():
+    for metadata in ROOT.glob("*/job.json"):
+        try:
+            record = json.loads(metadata.read_text(encoding="utf-8"))
+            job_id = metadata.parent.name
+            if len(job_id) != 32 or not all(c in "0123456789abcdef" for c in job_id):
+                continue
+            if record.get("id") != job_id:
+                continue
+            if record.get("status") not in ("complete", "failed"):
+                record["status"] = "failed"
+                record["error"] = "Processing interrupted by server restart. Submit the video again."
+                record["outputs"] = []
+            jobs[job_id] = record
+            persist_job(job_id)
+        except (OSError, ValueError, TypeError):
+            logger.warning("Skipping invalid job metadata at %s", metadata)
+
+recover_jobs()
+
 def probe(path: Path) -> float:
     result = subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(path)],capture_output=True,text=True,check=True,timeout=30)
     duration = float(result.stdout.strip())
@@ -113,6 +147,7 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
         # Imported source is no longer needed once rendered outputs are ready.
         source.unlink(missing_ok=True)
         jobs[job_id].update(status="complete",outputs=outputs,transcript_segments=len(segments))
+        persist_job(job_id)
     except Exception:
         logger.exception("Processing failed for job %s", job_id)
         shutil.rmtree(source.parent, ignore_errors=True)
@@ -174,6 +209,7 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
             jobs.pop(job_id, None)
         raise
     jobs[job_id]["status"]="queued"
+    persist_job(job_id)
     threading.Thread(target=process,args=(job_id,source,chosen),daemon=True).start()
     return jobs[job_id]
 
@@ -315,6 +351,7 @@ def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), 
         jobs[job_id] = {"id": job_id, "status": "queued", "outputs": [], "lengths": list(chosen)}
     try:
         (ROOT / job_id).mkdir()
+        persist_job(job_id)
         threading.Thread(target=process_link, args=(job_id, validated, chosen), daemon=True).start()
     except Exception:
         with lock:
