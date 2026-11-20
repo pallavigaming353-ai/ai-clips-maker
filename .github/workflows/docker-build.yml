@@ -36,7 +36,7 @@ jobs:
         run: |
           docker run -d --name clipper-api-test -p 127.0.0.1:18000:8000 ai-clips-maker-api:ci
           for i in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:18000/api/health; then exit 0; fi
+            if curl --fail --silent http://127.0.0.1:18000/api/ready; then exit 0; fi
             sleep 2
           done
           docker logs clipper-api-test
