@@ -119,7 +119,20 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
         jobs[job_id].update(status="failed",error="Processing failed. Check server logs for details.")
 
 @app.get("/api/health")
-def health(): return {"status":"ok"}
+def health():
+    return {"status": "ok"}
+
+@app.get("/api/ready")
+def ready(authorization: str | None = Header(default=None)):
+    check_token(authorization)
+    dependencies = {
+        "ffmpeg": shutil.which("ffmpeg") is not None,
+        "ffprobe": shutil.which("ffprobe") is not None,
+    }
+    storage = ROOT.is_dir() and os.access(ROOT, os.W_OK | os.X_OK)
+    if not all(dependencies.values()) or not storage:
+        raise HTTPException(503, detail={"dependencies": dependencies, "storage_writable": storage})
+    return {"status": "ready", "dependencies": dependencies, "storage_writable": storage}
 
 @app.post("/api/jobs",status_code=202)
 async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60'), authorization: str | None=Header(default=None)):
