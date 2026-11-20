@@ -28,5 +28,22 @@ class ApiTests(unittest.TestCase):
             response = self.client.get("/api/jobs/missing", headers={"Authorization": "Bearer unit-test-secret"})
             self.assertEqual(response.status_code, 404)
 
+
+    def test_download_rejects_unregistered_files(self):
+        with patch.dict(main.jobs, {"testjob": {"status": "complete", "outputs": []}}):
+            response = self.client.get("/api/jobs/testjob/files/secret.mp4")
+            self.assertEqual(response.status_code, 404)
+
+    def test_download_rejects_incomplete_job(self):
+        with patch.dict(main.jobs, {"testjob": {"status": "rendering", "outputs": []}}):
+            response = self.client.get("/api/jobs/testjob/files/30s_1_vertical.mp4")
+            self.assertEqual(response.status_code, 404)
+
+    def test_rejects_job_when_capacity_reached(self):
+        with patch.dict(main.jobs, {"busy": {"status": "rendering", "outputs": []}}):
+            with patch.object(main, "MAX_ACTIVE_JOBS", 1):
+                response = self.client.post("/api/jobs", files={"file": ("test.mp4", io.BytesIO(b"fake"), "video/mp4")})
+                self.assertEqual(response.status_code, 429)
+
 if __name__ == "__main__":
     unittest.main()
