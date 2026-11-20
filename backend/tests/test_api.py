@@ -110,6 +110,17 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
+    def test_readiness_reports_missing_ffmpeg(self):
+        with patch.object(main.shutil, "which", return_value=None):
+            response = self.client.get("/api/ready")
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(response.json()["detail"]["dependencies"]["ffmpeg"])
+
+    def test_readiness_requires_auth_when_configured(self):
+        with patch.object(main, "API_TOKEN", "secret"):
+            response = self.client.get("/api/ready")
+            self.assertEqual(response.status_code, 401)
+
     def test_reject_unsupported_upload(self):
         response = self.client.post("/api/jobs", files={"file": ("bad.txt", io.BytesIO(b"bad"), "text/plain")})
         self.assertEqual(response.status_code, 415)
