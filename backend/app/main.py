@@ -68,7 +68,7 @@ def render(source:Path,target:Path,start:int,length:int,vertical:bool,subtitles:
     vf=("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" if vertical else "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
     # Relative subtitle filename avoids unsafe interpolation of user-supplied paths.
     # FFmpeg must be built with libass for the subtitles filter.
-    vf += ",subtitles=" + subtitles.name + ":force_style=FontSize=20,Outline=2,Shadow=1"
+    vf += ",subtitles=" + subtitles.name
     subprocess.run(["ffmpeg","-nostdin","-y","-ss",str(start),"-i",str(source),"-t",str(length),"-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-movflags","+faststart",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=7200,cwd=str(source.parent))
 
 def check_token(authorization: str | None):
