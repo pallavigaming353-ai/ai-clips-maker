@@ -1,5 +1,6 @@
 name: Backend core tests
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'backend/**'
