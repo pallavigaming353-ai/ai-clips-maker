@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.github
+.env
+.env.*
+!.env.example
+*.mp4
+*.mov
+clipper-data
+backend/clipper-data
+**/__pycache__
+**/.venv
+**/.pytest_cache
