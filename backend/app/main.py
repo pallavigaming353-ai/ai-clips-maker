@@ -197,7 +197,7 @@ def import_youtube_video(url: str, destination: Path):
     if not is_youtube_url(url):
         raise ValueError("Unsupported YouTube URL")
     options = {
-        "format": "best[ext=mp4][height<=720]/best[height<=720]/best",
+        "format": "best[ext=mp4][height<=720]/best[ext=mp4]",
         "outtmpl": str(destination.with_suffix(".%(ext)s")),
         "noplaylist": True,
         "max_filesize": MAX_BYTES,
@@ -210,13 +210,16 @@ def import_youtube_video(url: str, destination: Path):
     }
     with YoutubeDL(options) as downloader:
         metadata = downloader.extract_info(url, download=False)
-        if not metadata or metadata.get("duration", 0) > 4 * 3600:
+        if not metadata or metadata.get("_type") == "playlist" or metadata.get("duration") is None or metadata["duration"] > 4 * 3600:
             raise ValueError("Video unavailable or exceeds four hours")
         downloader.download([url])
     candidates = [p for p in destination.parent.glob("source.*") if p.is_file()]
     if len(candidates) != 1 or candidates[0].stat().st_size > MAX_BYTES:
         raise ValueError("Video import exceeded limits or produced unexpected files")
-    candidates[0].rename(destination)
+    if candidates[0].suffix.lower() != ".mp4":
+        raise ValueError("Source must be an MP4")
+    if candidates[0] != destination:
+        candidates[0].rename(destination)
 
 def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
     source = ROOT / job_id / "source.mp4"
