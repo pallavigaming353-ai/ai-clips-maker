@@ -149,6 +149,13 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
     return jobs[job_id]
 
 
+def is_youtube_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(value.strip())
+        return (parsed.scheme == "https" and parsed.hostname in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"} and not parsed.username and not parsed.password and parsed.port in (None, 443))
+    except ValueError:
+        return False
+
 def validate_source_url(value: str) -> str:
     """Only HTTPS direct-media URLs on explicitly trusted hosts."""
     url = urlsplit(value.strip())
@@ -184,11 +191,41 @@ def import_direct_video(url: str, destination: Path):
             if not total:
                 raise ValueError("Empty linked video")
 
+def import_youtube_video(url: str, destination: Path):
+    """Best-effort import of publicly accessible videos, without login or DRM bypass."""
+    from yt_dlp import YoutubeDL
+    if not is_youtube_url(url):
+        raise ValueError("Unsupported YouTube URL")
+    options = {
+        "format": "best[ext=mp4][height<=720]/best[height<=720]/best",
+        "outtmpl": str(destination.with_suffix(".%(ext)s")),
+        "noplaylist": True,
+        "max_filesize": MAX_BYTES,
+        "socket_timeout": 30,
+        "retries": 2,
+        "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": False,
+        "extract_flat": False,
+    }
+    with YoutubeDL(options) as downloader:
+        metadata = downloader.extract_info(url, download=False)
+        if not metadata or metadata.get("duration", 0) > 4 * 3600:
+            raise ValueError("Video unavailable or exceeds four hours")
+        downloader.download([url])
+    candidates = [p for p in destination.parent.glob("source.*") if p.is_file()]
+    if len(candidates) != 1 or candidates[0].stat().st_size > MAX_BYTES:
+        raise ValueError("Video import exceeded limits or produced unexpected files")
+    candidates[0].rename(destination)
+
 def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
     source = ROOT / job_id / "source.mp4"
     try:
         jobs[job_id]["status"] = "importing"
-        import_direct_video(url, source)
+        if is_youtube_url(url):
+            import_youtube_video(url, source)
+        else:
+            import_direct_video(url, source)
         process(job_id, source, lengths)
     except Exception:
         logger.exception("Link import failed for job %s", job_id)
@@ -197,7 +234,7 @@ def process_link(job_id: str, url: str, lengths: tuple[int, ...]):
 @app.post("/api/jobs/from-link", status_code=202)
 def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), authorization: str | None = Header(default=None)):
     check_token(authorization)
-    validated = validate_source_url(url)
+    validated = url.strip() if is_youtube_url(url) else validate_source_url(url)
     try:
         chosen = tuple(sorted(set(int(x.strip()) for x in lengths.split(","))))
     except ValueError:
