@@ -4,6 +4,7 @@ import subprocess
 import threading
 import secrets
 import logging
+import shutil
 import uuid
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile, Header, Form
@@ -109,15 +110,21 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         raise HTTPException(422, "Invalid clip lengths")
     if not chosen or any(x not in (30, 60, 1800) for x in chosen):
         raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
-    with lock:
-        active = sum(j["status"] not in ("complete", "failed") for j in jobs.values())
-        if active >= MAX_ACTIVE_JOBS:
-            raise HTTPException(429, "Processing capacity reached. Retry later.")
     if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
         raise HTTPException(415,"Upload MP4 or MOV")
     job_id=uuid.uuid4().hex
     folder=ROOT/job_id
-    folder.mkdir()
+    with lock:
+        active = sum(j["status"] not in ("complete", "failed") for j in jobs.values())
+        if active >= MAX_ACTIVE_JOBS:
+            raise HTTPException(429, "Processing capacity reached. Retry later.")
+        jobs[job_id]={"id":job_id,"status":"uploading","outputs":[],"lengths":list(chosen)}
+    try:
+        folder.mkdir()
+    except Exception:
+        with lock:
+            jobs.pop(job_id, None)
+        raise
     source=folder/("source.mov" if file.filename and file.filename.lower().endswith(".mov") else "source.mp4")
     size=0
     try:
@@ -129,10 +136,11 @@ async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60
         if not size: raise HTTPException(400,"Empty upload")
     except Exception:
         source.unlink(missing_ok=True)
-        folder.rmdir()
+        shutil.rmtree(folder, ignore_errors=True)
+        with lock:
+            jobs.pop(job_id, None)
         raise
-    with lock:
-        jobs[job_id]={"id":job_id,"status":"queued","outputs":[],"lengths":list(chosen)}
+    jobs[job_id]["status"]="queued"
     threading.Thread(target=process,args=(job_id,source,chosen),daemon=True).start()
     return jobs[job_id]
 
@@ -145,7 +153,11 @@ def get_job(job_id:str, authorization: str | None=Header(default=None)):
 @app.get("/api/jobs/{job_id}/files/{filename}")
 def get_file(job_id:str,filename:str, authorization: str | None=Header(default=None)):
     check_token(authorization)
-    if job_id not in jobs or filename!=Path(filename).name or not (filename.endswith('.mp4') or filename.endswith('.srt')):
+    if job_id not in jobs or jobs[job_id]["status"] != "complete" or filename!=Path(filename).name or not (filename.endswith('.mp4') or filename.endswith('.srt')):
+        raise HTTPException(404,"File not found")
+    allowed = {Path(o["name"]).name for o in jobs[job_id].get("outputs", [])}
+    allowed.update(Path(o["srt"]).name for o in jobs[job_id].get("outputs", []))
+    if filename not in allowed:
         raise HTTPException(404,"File not found")
     path=ROOT/job_id/filename
     if not path.is_file(): raise HTTPException(404,"File not found")
