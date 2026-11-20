@@ -1,0 +1,32 @@
+import io
+import unittest
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+from app import main
+
+class ApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+
+    def test_health(self):
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+
+    def test_reject_unsupported_upload(self):
+        response = self.client.post("/api/jobs", files={"file": ("bad.txt", io.BytesIO(b"bad"), "text/plain")})
+        self.assertEqual(response.status_code, 415)
+
+    def test_reject_invalid_durations(self):
+        response = self.client.post("/api/jobs", data={"lengths": "5,999"}, files={"file": ("test.mp4", io.BytesIO(b"fake"), "video/mp4")})
+        self.assertEqual(response.status_code, 422)
+
+    def test_token_guard(self):
+        with patch.object(main, "API_TOKEN", "unit-test-secret"):
+            response = self.client.get("/api/jobs/missing")
+            self.assertEqual(response.status_code, 401)
+            response = self.client.get("/api/jobs/missing", headers={"Authorization": "Bearer unit-test-secret"})
+            self.assertEqual(response.status_code, 404)
+
+if __name__ == "__main__":
+    unittest.main()
