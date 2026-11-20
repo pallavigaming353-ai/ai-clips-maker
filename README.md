@@ -42,3 +42,12 @@ The 30-minute windows are rendered only when the source is at least 30 minutes l
 
 ## Verification
 GitHub Actions includes Python core tests, an FFmpeg synthetic-video rendering smoke test, and a Next.js build check. CI outcomes have not yet been confirmed. Caption font rendering depends on Hindi-capable fonts installed on the processing host. Optional CLIPPER_API_TOKEN protects API endpoints but the current browser UI does not support token-authenticated preview/download; use only a local trusted development environment until end-to-end user authentication is implemented.
+
+## Backend container (local testing only)
+
+```bash
+docker build -t ai-clips-maker-api ./backend
+docker run --rm -p 127.0.0.1:8000:8000 -e MAX_ACTIVE_JOBS=1 ai-clips-maker-api
+```
+
+The container includes FFmpeg and Noto fonts for Devanagari captions. This is a **local test configuration**, not a public deployment recipe. Production still needs authenticated sessions, protected file delivery, a durable queue, cleanup policies, resource isolation, and storage persistence. MAX_ACTIVE_JOBS currently limits accepted active jobs in a single process and does not provide distributed admission control. Do not run multiple workers as a workaround.
