@@ -48,20 +48,29 @@ def transcribe(path: Path):
     return [{"start":float(s.start),"end":float(s.end),"text":s.text.strip()} for s in segments if s.text.strip()]
 
 def windows(segments, duration, length, limit=3):
-    if duration < length: return []
-    # Deterministic speech-density heuristic; not a semantic AI highlight score.
-    candidates=[]
-    step=max(15,length//2)
-    for start in range(0,int(duration-length)+1,step):
-        end=start+length
-        score=sum(max(0,min(end,s["end"])-max(start,s["start"])) for s in segments)
-        candidates.append((score,start))
-    candidates.sort(reverse=True)
-    chosen=[]
-    for score,start in candidates:
-        if all(abs(start-prev)>=length for prev in chosen):
+    if duration < length or limit <= 0:
+        return []
+    # Speech-density baseline, not semantic highlight ranking.
+    step = max(15, length // 2)
+    last_start = max(0, int(duration - length))
+    starts = sorted(set(range(0, last_start + 1, step)) | {last_start})
+    candidates = []
+    for start in starts:
+        end = start + length
+        score = sum(max(0, min(end, s["end"]) - max(start, s["start"])) for s in segments)
+        candidates.append((score, start))
+    # Do not create random silent clips if speech is absent.
+    if not segments:
+        return [0] if last_start == 0 else []
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    chosen = []
+    for score, start in candidates:
+        if score <= 0:
+            break
+        if all(abs(start - previous) >= length for previous in chosen):
             chosen.append(start)
-        if len(chosen)>=limit: break
+        if len(chosen) >= limit:
+            break
     return sorted(chosen)
 
 def render(source:Path,target:Path,start:int,length:int,vertical:bool,subtitles:Path):
