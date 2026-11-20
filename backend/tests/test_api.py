@@ -68,7 +68,7 @@ class ApiTests(unittest.TestCase):
 
     def test_link_pipeline_produces_registered_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
-            job_id = "integrationtest"
+            job_id = "e" * 32
             folder = Path(directory) / job_id
             folder.mkdir()
             def fake_import(url, target):
@@ -93,7 +93,7 @@ class ApiTests(unittest.TestCase):
 
     def test_silent_source_fails_and_cleans_up(self):
         with tempfile.TemporaryDirectory() as directory:
-            job_id = "silenttest"
+            job_id = "f" * 32
             folder = Path(directory) / job_id
             folder.mkdir()
             source = folder / "source.mp4"
