@@ -16,6 +16,13 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(all(0 <= start <= 170 for start in result))
         self.assertTrue(all(abs(a-b) >= 30 for i,a in enumerate(result) for b in result[i+1:]))
 
+    def test_no_speech_does_not_generate_random_clips(self):
+        self.assertEqual(windows([], 120, 30), [])
+
+    def test_tail_speech_is_considered(self):
+        speech = [{"start": 91, "end": 99, "text": "important ending"}]
+        self.assertEqual(windows(speech, 100, 30, limit=1), [70])
+
     def test_long_window(self):
         self.assertEqual(windows([], 1800, 1800), [0])
 
