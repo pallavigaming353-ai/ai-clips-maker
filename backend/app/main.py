@@ -392,7 +392,10 @@ def create_link_job(url: str = Form(...), lengths: str = Form(default="30,60"), 
         raise HTTPException(422, "Invalid clip lengths")
     if not chosen or any(x not in (30, 60, 1800) for x in chosen):
         raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
-    if layout not in ("fill", "blur"):\n        raise HTTPException(422, "Choose a valid NeonClipping layout")\n    job_id = uuid.uuid4().hex\n    with lock:
+    if layout not in ("fill", "blur"):
+        raise HTTPException(422, "Choose a valid NeonClipping layout")
+    job_id = uuid.uuid4().hex
+    with lock:
         if sum(j["status"] not in ("complete", "failed") for j in jobs.values()) >= MAX_ACTIVE_JOBS:
             raise HTTPException(429, "Processing capacity reached. Retry later.")
         jobs[job_id] = {"id": job_id, "status": "queued", "outputs": [], "lengths": list(chosen)}
