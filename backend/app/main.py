@@ -89,6 +89,8 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
         jobs[job_id]["status"]="transcribing"
         duration=probe(source)
         segments=transcribe(source)
+        if not segments:
+            raise ValueError("No speech detected in the source video")
         jobs[job_id]["status"]="rendering"
         outputs=[]
         folder=source.parent
@@ -106,6 +108,8 @@ def process(job_id:str,source:Path,lengths:tuple[int,...]):
                     target=folder/f"{name}_{aspect}.mp4"
                     render(source,target,start,length,vertical,srt)
                     outputs.append({"name":target.name,"duration":length,"start":start,"aspect":aspect,"video":f"/api/jobs/{job_id}/files/{target.name}","srt":f"/api/jobs/{job_id}/files/{srt.name}"})
+        if not outputs:
+            raise ValueError("No suitable speech-containing windows for selected clip lengths")
         # Imported source is no longer needed once rendered outputs are ready.
         source.unlink(missing_ok=True)
         jobs[job_id].update(status="complete",outputs=outputs,transcript_segments=len(segments))
