@@ -36,7 +36,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: python -m pip install -r backend/requirements.txt
       - name: Render real MP4s with NeonClipping fill and blur layouts
-        run: cd backend && python tests/smoke_neon_render.py
+        run: cd backend && PYTHONPATH=. python tests/smoke_neon_render.py
   frontend:
     runs-on: ubuntu-latest
     steps:
