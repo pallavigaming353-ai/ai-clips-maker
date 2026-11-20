@@ -90,6 +90,21 @@ class ApiTests(unittest.TestCase):
                     self.assertTrue((folder / output["name"]).is_file())
                     self.assertTrue((folder / Path(output["srt"]).name).is_file())
 
+    def test_silent_source_fails_and_cleans_up(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job_id = "silenttest"
+            folder = Path(directory) / job_id
+            folder.mkdir()
+            source = folder / "source.mp4"
+            source.write_bytes(b"fake")
+            with patch.object(main, "ROOT", Path(directory)), \\
+                 patch.object(main, "probe", return_value=60.0), \\
+                 patch.object(main, "transcribe", return_value=[]), \\
+                 patch.dict(main.jobs, {job_id: {"id": job_id, "status": "queued", "outputs": []}}):
+                main.process(job_id, source, (30,))
+                self.assertEqual(main.jobs[job_id]["status"], "failed")
+                self.assertFalse(folder.exists())
+
     def test_health(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
