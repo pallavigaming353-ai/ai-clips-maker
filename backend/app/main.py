@@ -5,7 +5,7 @@ import threading
 import secrets
 import uuid
 from pathlib import Path
-from fastapi import FastAPI, File, HTTPException, UploadFile, Header
+from fastapi import FastAPI, File, HTTPException, UploadFile, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -67,7 +67,7 @@ def check_token(authorization: str | None):
     if API_TOKEN and not secrets.compare_digest(authorization or '', 'Bearer '+API_TOKEN):
         raise HTTPException(401, 'Unauthorized')
 
-def process(job_id:str,source:Path):
+def process(job_id:str,source:Path,lengths:tuple[int,...]):
     try:
         jobs[job_id]["status"]="transcribing"
         duration=probe(source)
@@ -75,7 +75,7 @@ def process(job_id:str,source:Path):
         jobs[job_id]["status"]="rendering"
         outputs=[]
         folder=source.parent
-        for length in (30,60,1800):
+        for length in lengths:
             for idx,start in enumerate(windows(segments,duration,length),1):
                 subset=[s for s in segments if s["end"]>start and s["start"]<start+length]
                 name=f"{length}s_{idx}"
@@ -98,8 +98,14 @@ def process(job_id:str,source:Path):
 def health(): return {"status":"ok"}
 
 @app.post("/api/jobs",status_code=202)
-async def create_job(file:UploadFile=File(...), authorization: str | None=Header(default=None)):
+async def create_job(file:UploadFile=File(...), lengths: str=Form(default='30,60'), authorization: str | None=Header(default=None)):
     check_token(authorization)
+    try:
+        chosen = tuple(sorted(set(int(x.strip()) for x in lengths.split(','))))
+    except ValueError:
+        raise HTTPException(422, "Invalid clip lengths")
+    if not chosen or any(x not in (30, 60, 1800) for x in chosen):
+        raise HTTPException(422, "Choose one or more lengths: 30, 60, 1800")
     if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
         raise HTTPException(415,"Upload MP4 or MOV")
     job_id=uuid.uuid4().hex
@@ -118,8 +124,8 @@ async def create_job(file:UploadFile=File(...), authorization: str | None=Header
         source.unlink(missing_ok=True)
         folder.rmdir()
         raise
-    jobs[job_id]={"id":job_id,"status":"queued","outputs":[]}
-    threading.Thread(target=process,args=(job_id,source),daemon=True).start()
+    jobs[job_id]={"id":job_id,"status":"queued","outputs":[],"lengths":list(chosen)}
+    threading.Thread(target=process,args=(job_id,source,chosen),daemon=True).start()
     return jobs[job_id]
 
 @app.get("/api/jobs/{job_id}")
