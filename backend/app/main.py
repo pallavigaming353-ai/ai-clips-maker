@@ -1,11 +1,11 @@
 from __future__ import annotations
-import json
 import os
 import subprocess
 import threading
+import secrets
 import uuid
 from pathlib import Path
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -14,6 +14,7 @@ ROOT.mkdir(parents=True, exist_ok=True)
 MAX_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(2 * 1024**3)))
 jobs: dict[str, dict] = {}
 lock = threading.Lock()
+API_TOKEN = os.environ.get('CLIPPER_API_TOKEN', '')
 app = FastAPI(title="AI Clips Maker API")
 origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET","POST"], allow_headers=["*"])
@@ -60,6 +61,10 @@ def render(source:Path,target:Path,start:int,length:int,vertical:bool,subtitles:
     # Captions are exported as separate SRT, not burned into the MP4 in this milestone.
     subprocess.run(["ffmpeg","-nostdin","-y","-ss",str(start),"-i",str(source),"-t",str(length),"-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-movflags","+faststart",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=7200)
 
+def check_token(authorization: str | None):
+    if API_TOKEN and not secrets.compare_digest(authorization or '', 'Bearer '+API_TOKEN):
+        raise HTTPException(401, 'Unauthorized')
+
 def process(job_id:str,source:Path):
     try:
         jobs[job_id]["status"]="transcribing"
@@ -90,7 +95,8 @@ def process(job_id:str,source:Path):
 def health(): return {"status":"ok"}
 
 @app.post("/api/jobs",status_code=202)
-async def create_job(file:UploadFile=File(...)):
+async def create_job(file:UploadFile=File(...), authorization: str | None=Header(default=None)):
+    check_token(authorization)
     if file.content_type not in ("video/mp4","video/quicktime","application/octet-stream"):
         raise HTTPException(415,"Upload MP4 or MOV")
     job_id=uuid.uuid4().hex
@@ -114,13 +120,15 @@ async def create_job(file:UploadFile=File(...)):
     return jobs[job_id]
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id:str):
+def get_job(job_id:str, authorization: str | None=Header(default=None)):
+    check_token(authorization)
     if job_id not in jobs: raise HTTPException(404,"Job not found")
     return jobs[job_id]
 
 @app.get("/api/jobs/{job_id}/files/{filename}")
-def get_file(job_id:str,filename:str):
-    if job_id not in jobs or filename!=Path(filename).name or filename.startswith("source"):
+def get_file(job_id:str,filename:str, authorization: str | None=Header(default=None)):
+    check_token(authorization)
+    if job_id not in jobs or filename!=Path(filename).name or not (filename.endswith('.mp4') or filename.endswith('.srt')):
         raise HTTPException(404,"File not found")
     path=ROOT/job_id/filename
     if not path.is_file(): raise HTTPException(404,"File not found")
