@@ -44,7 +44,7 @@ def srt_time(seconds: float) -> str:
 def transcribe(path: Path):
     from faster_whisper import WhisperModel
     model = WhisperModel(os.environ.get("WHISPER_MODEL","small"), device="cpu", compute_type="int8")
-    segments,_ = model.transcribe(str(path),language="hi",vad_filter=True,beam_size=3)
+    segments,_ = model.transcribe(str(path),language=os.environ.get("TRANSCRIPTION_LANGUAGE") or None,vad_filter=True,beam_size=3)
     return [{"start":float(s.start),"end":float(s.end),"text":s.text.strip()} for s in segments if s.text.strip()]
 
 def windows(segments, duration, length, limit=3):
